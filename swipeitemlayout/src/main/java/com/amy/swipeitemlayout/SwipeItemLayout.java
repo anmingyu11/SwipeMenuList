@@ -23,7 +23,7 @@ public class SwipeItemLayout extends FrameLayout {
         Opened, Closed, Moving
     }
 
-    private static boolean isBlocking = true;
+    private static boolean isBlocking = false;
     // 顶部视图
     private View mTopView;
     // 底部视图
@@ -178,14 +178,6 @@ public class SwipeItemLayout extends FrameLayout {
         mDragHelper = ViewDragHelper.create(this, 1.0f, mDragHelperCallBack);
     }
 
-    @Override
-    public void computeScroll() {
-        if (mDragHelper.continueSettling(false)) {
-            ViewCompat.postInvalidateOnAnimation(this);
-        }
-        super.computeScroll();
-    }
-
     private void dispatchSwipeEvent() {
         //Status preStatus = mCurrentStatus;
         updateCurrentStatus();
@@ -236,6 +228,16 @@ public class SwipeItemLayout extends FrameLayout {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+    }
+
+    @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
 
         final int bottomWidth = mBottomView.getMeasuredWidth();
@@ -250,7 +252,6 @@ public class SwipeItemLayout extends FrameLayout {
         final int topTop = getPaddingTop() + mTopLp.topMargin;
         final int topBottom = topTop + topHeight;
         final int topRight = Math.min(mTopLeft + topWidth, r - getPaddingRight() - mTopLp.rightMargin);
-
 
         final int bottomTop = getPaddingTop() + mBottomLp.topMargin;
         final int bottomBottom = bottomTop + bottomHeight;
@@ -288,6 +289,33 @@ public class SwipeItemLayout extends FrameLayout {
         mTopView.layout(mTopLeft, topTop, topRight, topBottom);
     }
 
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+
+        if (!isBlockMode) {
+            return super.dispatchTouchEvent(ev);
+        }
+
+        final int action = MotionEventCompat.getActionMasked(ev);
+        switch (action) {
+            case MotionEvent.ACTION_DOWN: {
+                if (isBlocking) {
+                    return false;
+                } else {
+                    isBlocking = true;
+                }
+                break;
+            }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                isBlocking = false;
+                break;
+            }
+        }
+
+        return super.dispatchTouchEvent(ev);
+    }
+
     //拦截触控事件
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
@@ -306,14 +334,60 @@ public class SwipeItemLayout extends FrameLayout {
         return true;
     }
 
-    //----------------------------------------------API--------------------------------------
-
-    public static boolean enableDebug = false;
-
-    private static boolean isBlockMode = false;
+    //----------------------------------------------ANIM-------------------------------------
+    @Override
+    public void computeScroll() {
+        if (mDragHelper.continueSettling(true)) {
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+        super.computeScroll();
+    }
 
     /**
-     * 是否开启阻塞模式,阻塞模式下,所有的swipeItemLayout控件只能有一个处于open状态.
+     * 打开或关闭滑动控件
+     */
+    public void slide() {
+        if (mDragHelper.getViewDragState() != ViewDragHelper.STATE_IDLE) {
+            LogUtil.e("Top item view can not slide.");
+            return;
+        }
+
+        final int open = mCurrentStatus == Status.Closed ? 1 : 0;
+        final int finalTop = getPaddingTop() + mTopLp.topMargin;
+        final int finalLeft = getTopViewOriginTargetLeft(open);
+
+        boolean anim;
+        anim = mDragHelper.smoothSlideViewTo(mTopView, finalLeft, finalTop);
+        if (anim) {
+            ViewCompat.postInvalidateOnAnimation(this);
+        }
+    }
+
+    private int getTopViewOriginTargetLeft(int isOpen) {
+        int left = getPaddingLeft() + mTopLp.leftMargin;
+        if (mSwipeDirection == SwipeDirection.Left) {
+            left = left - isOpen * mDragRange;
+        } else {
+            left = left + isOpen * mDragRange;
+        }
+        return left;
+    }
+
+    //----------------------------------------------API--------------------------------------
+
+    /**
+     * 默认开启 debug = true
+     *
+     * @param debug
+     */
+    public void setDebug(boolean debug) {
+        LogUtil.enableDebug(debug);
+    }
+
+    private static boolean isBlockMode = true;
+
+    /**
+     * 是否开启阻塞模式,阻塞模式下,所有的swipeItemLayout控件只能有一个接收触摸事件
      *
      * @param open
      */
@@ -365,7 +439,7 @@ public class SwipeItemLayout extends FrameLayout {
     private int mDragRange;
 
     /**
-     * 设置拖动距离
+     * Todo: 设置拖动距离
      *
      * @param dragRange
      */
@@ -384,7 +458,7 @@ public class SwipeItemLayout extends FrameLayout {
     }
 
     // 移动过程中，底部视图的移动方式（拉出，被顶部视图遮住），默认是被顶部视图遮住
-    private LayoutModel mLayoutModel = LayoutModel.LayDown;
+    private LayoutModel mLayoutModel = LayoutModel.PullOut;
 
     public void setLayoutModel(LayoutModel layoutModel) {
         mLayoutModel = layoutModel;
