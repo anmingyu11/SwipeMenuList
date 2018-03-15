@@ -9,8 +9,15 @@
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="SwipeItemDisplay"
         android:onClick="startSwipeItemDisplay"
+        android:text="SwipeItemDisplay"
+        />
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="startSwipeItemRecyclerView"
+        android:text="SwipeItemRecyclerView"
         />
 
 </LinearLayout>

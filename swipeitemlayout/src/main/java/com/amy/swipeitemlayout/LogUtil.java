@@ -4,7 +4,7 @@ import android.util.Log;
 
 import java.util.Locale;
 
-class LogUtil {
+public class LogUtil {
     private static boolean ENABLE_DEBUG = true;
     public static String TAG = " AMY ";
 

@@ -11,9 +11,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        startSwipeItemRecyclerView(null);
+        //startSwipeItemDisplay(null);
     }
 
     public void startSwipeItemDisplay(View view) {
         startActivity(new Intent(this, SwipeItemDisplayActivity.class));
+    }
+
+    public void startSwipeItemRecyclerView(View view){
+        startActivity(new Intent(this,SwipeItemRecyclerViewActivity.class));
     }
 }

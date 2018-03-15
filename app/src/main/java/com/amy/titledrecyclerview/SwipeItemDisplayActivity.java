@@ -14,8 +14,8 @@ public class SwipeItemDisplayActivity extends AppCompatActivity {
         setContentView(R.layout.activity_swipeitemdisplay);
     }
 
-    public void onSlide(View view){
+    public void onSlide(View view) {
         SwipeItemLayout itemLayout = findViewById(R.id.swipeitemlast);
-        itemLayout.slide();
+        itemLayout.slideAuto(false);
     }
 }

@@ -1,13 +1,18 @@
 package com.amy.swipeitemlayout;
 
 import android.content.Context;
+import android.support.v4.view.GestureDetectorCompat;
 import android.support.v4.view.MotionEventCompat;
 import android.support.v4.view.ViewCompat;
 import android.support.v4.widget.ViewDragHelper;
 import android.util.AttributeSet;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewParent;
 import android.widget.FrameLayout;
+
+import static android.support.v4.widget.ViewDragHelper.STATE_IDLE;
 
 public class SwipeItemLayout extends FrameLayout {
 
@@ -23,7 +28,50 @@ public class SwipeItemLayout extends FrameLayout {
         Opened, Closed, Moving
     }
 
-    private static boolean isBlocking = false;
+    public abstract static class onWindowVisibilityChangedListener implements _OnWindowVisibilityChangedListener {
+        @Override
+        public void onWindowVisible(SwipeItemLayout item) {
+        }
+
+        @Override
+        public void onWindowInvisible(SwipeItemLayout item) {
+        }
+
+        @Override
+        public void onWindowGone(SwipeItemLayout item) {
+        }
+    }
+
+    interface _OnWindowVisibilityChangedListener {
+        void onWindowVisible(SwipeItemLayout item);
+
+        void onWindowInvisible(SwipeItemLayout item);
+
+        void onWindowGone(SwipeItemLayout item);
+    }
+
+    public abstract static class OpenStatusListener implements _OpenStatusListener {
+        public void onOpened(SwipeItemLayout item) {
+        }
+
+        @Override
+        public void onClosed(SwipeItemLayout item) {
+        }
+
+        @Override
+        public void onMoving(SwipeItemLayout item) {
+        }
+    }
+
+    interface _OpenStatusListener {
+        void onOpened(SwipeItemLayout item);
+
+        void onClosed(SwipeItemLayout item);
+
+        void onMoving(SwipeItemLayout item);
+    }
+
+    private static boolean isTouching = false;
     // 顶部视图
     private View mTopView;
     // 底部视图
@@ -45,8 +93,8 @@ public class SwipeItemLayout extends FrameLayout {
     // 底部视图外边距
     private MarginLayoutParams mBottomLp;
     //手势识别部分;
-    //private GestureDetectorCompat mGestureDetectorCompat;
-    //private GestureDetector.SimpleOnGestureListener mSimpleOnGestureListener;
+    private GestureDetectorCompat mGestureDetector;
+    private GestureDetector.SimpleOnGestureListener mSimpleOnGestureListener;
     //拖动识别部分
     private ViewDragHelper mDragHelper;
     private ViewDragHelper.Callback mDragHelperCallBack;
@@ -79,7 +127,19 @@ public class SwipeItemLayout extends FrameLayout {
 
             @Override
             public void onViewDragStateChanged(int state) {
-                super.onViewDragStateChanged(state);
+                /*
+                switch (state) {
+                    case STATE_IDLE: {
+                        break;
+                    }
+                    case STATE_DRAGGING: {
+                        break;
+                    }
+                    case STATE_SETTLING: {
+                        break;
+                    }
+                }
+                */
             }
 
             @Override
@@ -134,7 +194,7 @@ public class SwipeItemLayout extends FrameLayout {
 
                 dispatchSwipeEvent();
 
-                //Todo requestLayout();通过offsetLeftAndRight来移动view,requestLayout需要时间
+                //Todo requestLayout();通过offsetLeftAndRight来移动view,如用requestLayout需要时间
                 if (mLayoutModel == LayoutModel.PullOut) {
                     ViewCompat.offsetLeftAndRight(mBottomView, dx);
                     ViewCompat.offsetTopAndBottom(mBottomView, dy);
@@ -175,7 +235,67 @@ public class SwipeItemLayout extends FrameLayout {
             }
         };
 
-        mDragHelper = ViewDragHelper.create(this, 1.0f, mDragHelperCallBack);
+        mDragHelper = ViewDragHelper.create(this, mDragSensitivity, mDragHelperCallBack);
+
+        //GestureDetector
+        mSimpleOnGestureListener = new GestureDetector.SimpleOnGestureListener() {
+
+            Runnable mCancelPressedTask = new Runnable() {
+                @Override
+                public void run() {
+                    setPressed(false);
+                }
+            };
+
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                if (Math.abs(distanceX) > Math.abs(distanceY)) {
+                    requestParentDisallowInterceptTouchEvent(true);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (Math.abs(velocityX) > Math.abs(velocityY)) {
+                    requestParentDisallowInterceptTouchEvent(true);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                // 2
+                setPressed(false);
+                if (isClosed()) {
+                    return performClick();
+                }
+                return false;
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                // 1
+                if (isClosed()) {
+                    setPressed(true);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                if (isClosed()) {
+                    setPressed(true);
+                    postDelayed(mCancelPressedTask, 300);
+                    performLongClick();
+                }
+            }
+
+        };
+        mGestureDetector = new GestureDetectorCompat(getContext(), mSimpleOnGestureListener);
     }
 
     private void dispatchSwipeEvent() {
@@ -205,6 +325,27 @@ public class SwipeItemLayout extends FrameLayout {
                 mCurrentStatus = Status.Moving;
             }
         }
+
+        //Update Listener State
+        if (mOpenStatusListener == null) {
+            return;
+        }
+
+        LogUtil.d("updating Status : " + mCurrentStatus);
+        switch (mCurrentStatus) {
+            case Opened: {
+                mOpenStatusListener.onOpened(this);
+                break;
+            }
+            case Closed: {
+                mOpenStatusListener.onClosed(this);
+                break;
+            }
+            case Moving: {
+                mOpenStatusListener.onMoving(this);
+                break;
+            }
+        }
     }
 
     @Override
@@ -228,13 +369,28 @@ public class SwipeItemLayout extends FrameLayout {
     }
 
     @Override
-    protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-    }
+    protected void onWindowVisibilityChanged(int visibility) {
 
-    @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
+        if (mOnWindowVisibilityChangedListener == null) {
+            return;
+        }
+
+        switch (visibility) {
+            case GONE: {
+                mOnWindowVisibilityChangedListener.onWindowGone(this);
+                break;
+            }
+            case VISIBLE: {
+                mOnWindowVisibilityChangedListener.onWindowVisible(this);
+                break;
+            }
+            case INVISIBLE: {
+                mOnWindowVisibilityChangedListener.onWindowInvisible(this);
+                break;
+            }
+        }
+
+        super.onWindowVisibilityChanged(visibility);
     }
 
     @Override
@@ -291,24 +447,19 @@ public class SwipeItemLayout extends FrameLayout {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-
-        if (!isBlockMode) {
-            return super.dispatchTouchEvent(ev);
-        }
-
         final int action = MotionEventCompat.getActionMasked(ev);
         switch (action) {
             case MotionEvent.ACTION_DOWN: {
-                if (isBlocking) {
+                if (isBlockMode && isTouching) {
                     return false;
                 } else {
-                    isBlocking = true;
+                    isTouching = true;
                 }
                 break;
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL: {
-                isBlocking = false;
+                isTouching = false;
                 break;
             }
         }
@@ -325,42 +476,35 @@ public class SwipeItemLayout extends FrameLayout {
             return false;
         }
 
-        return mDragHelper.shouldInterceptTouchEvent(ev);
+        return isTouching && mDragHelper.shouldInterceptTouchEvent(ev);
+    }
+
+    private void requestParentDisallowInterceptTouchEvent(boolean disallow) {
+        ViewParent parent = getParent();
+        if (parent != null) {
+            parent.requestDisallowInterceptTouchEvent(disallow);
+        }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
+        //boolean result;
         mDragHelper.processTouchEvent(ev);
+        mGestureDetector.onTouchEvent(ev);
+        /*
+        if (mOnTouchListener != null) {
+            mOnTouchListener.onTouch(this, ev);
+        }
+        */
         return true;
     }
 
-    //----------------------------------------------ANIM-------------------------------------
     @Override
     public void computeScroll() {
         if (mDragHelper.continueSettling(true)) {
             ViewCompat.postInvalidateOnAnimation(this);
         }
         super.computeScroll();
-    }
-
-    /**
-     * 打开或关闭滑动控件
-     */
-    public void slide() {
-        if (mDragHelper.getViewDragState() != ViewDragHelper.STATE_IDLE) {
-            LogUtil.e("Top item view can not slide.");
-            return;
-        }
-
-        final int open = mCurrentStatus == Status.Closed ? 1 : 0;
-        final int finalTop = getPaddingTop() + mTopLp.topMargin;
-        final int finalLeft = getTopViewOriginTargetLeft(open);
-
-        boolean anim;
-        anim = mDragHelper.smoothSlideViewTo(mTopView, finalLeft, finalTop);
-        if (anim) {
-            ViewCompat.postInvalidateOnAnimation(this);
-        }
     }
 
     private int getTopViewOriginTargetLeft(int isOpen) {
@@ -374,6 +518,43 @@ public class SwipeItemLayout extends FrameLayout {
     }
 
     //----------------------------------------------API--------------------------------------
+
+    /**
+     * 打开或关闭滑动控件
+     *
+     * @param open     0 关 1 开
+     * @param withAnim
+     */
+    public void slide(int open, boolean withAnim) {
+        final int finalTop = getPaddingTop() + mTopLp.topMargin;
+        final int finalTopLeft = getTopViewOriginTargetLeft(open);
+
+        if (withAnim) {
+            boolean anim;
+            anim = mDragHelper.smoothSlideViewTo(mTopView, finalTopLeft, finalTop);
+            if (anim) {
+                ViewCompat.postInvalidateOnAnimation(this);
+            }
+        } else {
+            final int topOffset = getTopViewOriginTargetLeft(1);
+            final int finalTopOffset = mCurrentStatus == Status.Closed ? topOffset : -topOffset;
+            mTopView.offsetLeftAndRight(finalTopOffset);
+            mDragHelperCallBack.onViewPositionChanged(mTopView, finalTopLeft, 0, finalTopOffset, 0);
+        }
+    }
+
+    /**
+     * 自动打开或关闭滑动控件
+     */
+    public void slideAuto(boolean withAnim) {
+        if (mDragHelper.getViewDragState() != STATE_IDLE || mCurrentStatus == Status.Moving) {
+            LogUtil.e("Top item view can not slide.");
+            return;
+        }
+
+        final int open = mCurrentStatus == Status.Closed ? 1 : 0;
+        slide(open, withAnim);
+    }
 
     /**
      * 默认开启 debug = true
@@ -396,11 +577,22 @@ public class SwipeItemLayout extends FrameLayout {
     }
 
     /**
-     * 默认的fling速度阈值
+     * 滑动控件当前的状态（打开，关闭，正在移动），默认是关闭状态
+     *
+     * @return
      */
+    public Status getStatus() {
+        return mCurrentStatus;
+    }
+
     public static final int DEFAULT_VEL_THRESHOLD = 400;
     private int VEL_THRESHOLD = DEFAULT_VEL_THRESHOLD;
 
+    /**
+     * fling的速度阈值 默认400
+     *
+     * @param velThreshold
+     */
     public void setVelThreshold(int velThreshold) {
         if (velThreshold < 0) {
             throw new IllegalArgumentException("vel cannot be < 0.");
@@ -408,9 +600,14 @@ public class SwipeItemLayout extends FrameLayout {
         VEL_THRESHOLD = velThreshold;
     }
 
-    public static final float DEFAULT_RELEASE_RATIO = 0.4f;
+    public static final float DEFAULT_RELEASE_RATIO = 0.5f;
     public float mReleaseRatio = DEFAULT_RELEASE_RATIO;
 
+    /**
+     * 释放时自动回弹的比率
+     *
+     * @param ratio
+     */
     public void setReleaseRatio(float ratio) {
         if (ratio > 1.0f || ratio < 0.0f) {
             throw new IllegalArgumentException("release ratio must between 0 to 1");
@@ -419,18 +616,44 @@ public class SwipeItemLayout extends FrameLayout {
         mReleaseRatio = ratio;
     }
 
+    public static final float DEFAULT_DRAG_SENSITIVITY = 0.5f;
+    private float mDragSensitivity = DEFAULT_DRAG_SENSITIVITY;
+
+    /**
+     * 越大越敏感 ^()^
+     *
+     * @param sensitivity
+     */
+    public void setDragSensitivity(float sensitivity) {
+        if (sensitivity < 0) {
+            throw new IllegalArgumentException("sensitivity cannot < 0");
+        }
+        mDragSensitivity = sensitivity;
+    }
+
     /**
      * 拖动的弹簧距离
      */
     private int mSpringDistance = 0;
 
     /**
-     * 设置拖动的距离
+     * 设置拖动的弹簧距离
      *
      * @param distance
      */
     public void setSpringDistance(int distance) {
         mSpringDistance = distance;
+    }
+
+    private onWindowVisibilityChangedListener mOnWindowVisibilityChangedListener = null;
+
+    /**
+     * 在当前window的可见性(非view可见性)变化时的回调接口
+     *
+     * @param listener
+     */
+    public void setOnWindowVisibilityChangedListener(onWindowVisibilityChangedListener listener) {
+        mOnWindowVisibilityChangedListener = listener;
     }
 
     /**
@@ -442,26 +665,50 @@ public class SwipeItemLayout extends FrameLayout {
      * Todo: 设置拖动距离
      *
      * @param dragRange
+     * public void setDragRange(int dragRange) {
+     * mDragRange = dragRange;
+     * }
      */
-    //public void setDragRange(int dragRange) {
-    //    mDragRange = dragRange;
-    //}
 
-    // 控件滑动方向（向左，向右），默认向左滑动
     private SwipeDirection mSwipeDirection = SwipeDirection.Left;
 
     /**
-     * 设置拖动方向
+     * 控件滑动方向（向左，向右），默认向左滑动
      */
     public void setSwipeDirection(SwipeDirection direction) {
         mSwipeDirection = direction;
     }
 
-    // 移动过程中，底部视图的移动方式（拉出，被顶部视图遮住），默认是被顶部视图遮住
-    private LayoutModel mLayoutModel = LayoutModel.PullOut;
+    private LayoutModel mLayoutModel = LayoutModel.LayDown;
 
+    /**
+     * 移动过程中，底部视图的移动方式（拉出，被顶部视图遮住），默认是被顶部视图遮住
+     *
+     * @param layoutModel
+     */
     public void setLayoutModel(LayoutModel layoutModel) {
         mLayoutModel = layoutModel;
     }
 
+    public boolean isClosed() {
+        return mCurrentStatus == Status.Closed;
+    }
+
+    private OpenStatusListener mOpenStatusListener;
+
+    /**
+     * 开关状态变化接口
+     *
+     * @param openStatusListener
+     */
+    public void setOpenStatusListener(OpenStatusListener openStatusListener) {
+        mOpenStatusListener = openStatusListener;
+    }
+    /*
+    private OnTouchListener mOnTouchListener;
+
+    public void setOnTouchListener(OnTouchListener touchListener) {
+        mOnTouchListener = touchListener;
+    }
+    */
 }
