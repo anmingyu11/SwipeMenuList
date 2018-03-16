@@ -5,12 +5,12 @@
     android:layout_height="match_parent"
     >
 
-    <android.support.v7.widget.RecyclerView
+    <com.amy.titledrecyclerview.CustomRecyclerView
         android:layout_centerHorizontal="true"
         android:id="@+id/swipe_item_list"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content">
 
-    </android.support.v7.widget.RecyclerView>
+    </com.amy.titledrecyclerview.CustomRecyclerView>
 
 </RelativeLayout>

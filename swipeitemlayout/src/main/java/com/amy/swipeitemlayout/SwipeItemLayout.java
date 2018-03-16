@@ -28,47 +28,28 @@ public class SwipeItemLayout extends FrameLayout {
         Opened, Closed, Moving
     }
 
-    public abstract static class onWindowVisibilityChangedListener implements _OnWindowVisibilityChangedListener {
-        @Override
-        public void onWindowVisible(SwipeItemLayout item) {
-        }
-
-        @Override
-        public void onWindowInvisible(SwipeItemLayout item) {
-        }
-
-        @Override
-        public void onWindowGone(SwipeItemLayout item) {
-        }
+    public interface OnWindowVisibilityChangedListener {
+        /**
+         * @param visibility
+         * @param item
+         * @see View#onWindowVisibilityChanged(int)
+         */
+        void onWindowVisibilityChanged(int visibility, SwipeItemLayout item);
     }
 
-    interface _OnWindowVisibilityChangedListener {
-        void onWindowVisible(SwipeItemLayout item);
-
-        void onWindowInvisible(SwipeItemLayout item);
-
-        void onWindowGone(SwipeItemLayout item);
+    public interface OpenStatusListener {
+        void onStatusChanged(Status status, SwipeItemLayout item);
     }
 
-    public abstract static class OpenStatusListener implements _OpenStatusListener {
-        public void onOpened(SwipeItemLayout item) {
-        }
-
-        @Override
-        public void onClosed(SwipeItemLayout item) {
-        }
-
-        @Override
-        public void onMoving(SwipeItemLayout item) {
-        }
-    }
-
-    interface _OpenStatusListener {
-        void onOpened(SwipeItemLayout item);
-
-        void onClosed(SwipeItemLayout item);
-
-        void onMoving(SwipeItemLayout item);
+    public interface DragStatusChangedListener {
+        /**
+         * @param state
+         * @param item
+         * @see ViewDragHelper#STATE_IDLE
+         * @see ViewDragHelper#STATE_DRAGGING
+         * @see ViewDragHelper#STATE_SETTLING
+         */
+        void onStatusChanged(int state, SwipeItemLayout item);
     }
 
     private static boolean isTouching = false;
@@ -114,10 +95,6 @@ public class SwipeItemLayout extends FrameLayout {
 
     private void init() {
 
-        //mSimpleOnGestureListener = new GestureDetector.SimpleOnGestureListener() {
-        //};
-        //mGestureDetectorCompat = new GestureDetectorCompat(getContext(), mSimpleOnGestureListener);
-
         mDragHelperCallBack = new ViewDragHelper.Callback() {
 
             @Override
@@ -127,32 +104,15 @@ public class SwipeItemLayout extends FrameLayout {
 
             @Override
             public void onViewDragStateChanged(int state) {
-                /*
-                switch (state) {
-                    case STATE_IDLE: {
-                        break;
-                    }
-                    case STATE_DRAGGING: {
-                        break;
-                    }
-                    case STATE_SETTLING: {
-                        break;
-                    }
+                if (mDragStatusChangedListener != null) {
+                    mDragStatusChangedListener.onStatusChanged(state, SwipeItemLayout.this);
                 }
-                */
             }
 
             @Override
             public int getViewVerticalDragRange(View child) {
                 return 0;
             }
-
-            /*
-            @Override
-            public int getOrderedChildIndex(int index) {
-                return indexOfChild(mTopView);
-            }
-            */
 
             @Override
             public int getViewHorizontalDragRange(View child) {
@@ -327,25 +287,11 @@ public class SwipeItemLayout extends FrameLayout {
         }
 
         //Update Listener State
-        if (mOpenStatusListener == null) {
-            return;
+        if (mOpenStatusListener != null) {
+            mOpenStatusListener.onStatusChanged(mCurrentStatus, this);
         }
 
         LogUtil.d("updating Status : " + mCurrentStatus);
-        switch (mCurrentStatus) {
-            case Opened: {
-                mOpenStatusListener.onOpened(this);
-                break;
-            }
-            case Closed: {
-                mOpenStatusListener.onClosed(this);
-                break;
-            }
-            case Moving: {
-                mOpenStatusListener.onMoving(this);
-                break;
-            }
-        }
     }
 
     @Override
@@ -371,23 +317,8 @@ public class SwipeItemLayout extends FrameLayout {
     @Override
     protected void onWindowVisibilityChanged(int visibility) {
 
-        if (mOnWindowVisibilityChangedListener == null) {
-            return;
-        }
-
-        switch (visibility) {
-            case GONE: {
-                mOnWindowVisibilityChangedListener.onWindowGone(this);
-                break;
-            }
-            case VISIBLE: {
-                mOnWindowVisibilityChangedListener.onWindowVisible(this);
-                break;
-            }
-            case INVISIBLE: {
-                mOnWindowVisibilityChangedListener.onWindowInvisible(this);
-                break;
-            }
+        if (mOnWindowVisibilityChangedListener != null) {
+            mOnWindowVisibilityChangedListener.onWindowVisibilityChanged(visibility, this);
         }
 
         super.onWindowVisibilityChanged(visibility);
@@ -479,7 +410,7 @@ public class SwipeItemLayout extends FrameLayout {
         return isTouching && mDragHelper.shouldInterceptTouchEvent(ev);
     }
 
-    private void requestParentDisallowInterceptTouchEvent(boolean disallow) {
+    public void requestParentDisallowInterceptTouchEvent(boolean disallow) {
         ViewParent parent = getParent();
         if (parent != null) {
             parent.requestDisallowInterceptTouchEvent(disallow);
@@ -491,11 +422,9 @@ public class SwipeItemLayout extends FrameLayout {
         //boolean result;
         mDragHelper.processTouchEvent(ev);
         mGestureDetector.onTouchEvent(ev);
-        /*
         if (mOnTouchListener != null) {
             mOnTouchListener.onTouch(this, ev);
         }
-        */
         return true;
     }
 
@@ -645,14 +574,14 @@ public class SwipeItemLayout extends FrameLayout {
         mSpringDistance = distance;
     }
 
-    private onWindowVisibilityChangedListener mOnWindowVisibilityChangedListener = null;
+    private OnWindowVisibilityChangedListener mOnWindowVisibilityChangedListener = null;
 
     /**
      * 在当前window的可见性(非view可见性)变化时的回调接口
      *
      * @param listener
      */
-    public void setOnWindowVisibilityChangedListener(onWindowVisibilityChangedListener listener) {
+    public void setOnWindowVisibilityChangedListener(OnWindowVisibilityChangedListener listener) {
         mOnWindowVisibilityChangedListener = listener;
     }
 
@@ -679,7 +608,7 @@ public class SwipeItemLayout extends FrameLayout {
         mSwipeDirection = direction;
     }
 
-    private LayoutModel mLayoutModel = LayoutModel.LayDown;
+    private LayoutModel mLayoutModel = LayoutModel.PullOut;
 
     /**
      * 移动过程中，底部视图的移动方式（拉出，被顶部视图遮住），默认是被顶部视图遮住
@@ -704,11 +633,16 @@ public class SwipeItemLayout extends FrameLayout {
     public void setOpenStatusListener(OpenStatusListener openStatusListener) {
         mOpenStatusListener = openStatusListener;
     }
-    /*
+
+    private DragStatusChangedListener mDragStatusChangedListener;
+
+    public void setDragStatusChangedListener(DragStatusChangedListener dragStatusChangedListener) {
+        mDragStatusChangedListener = dragStatusChangedListener;
+    }
+
     private OnTouchListener mOnTouchListener;
 
-    public void setOnTouchListener(OnTouchListener touchListener) {
-        mOnTouchListener = touchListener;
+    public void setTouchListener(OnTouchListener onTouchListener) {
+        mOnTouchListener = onTouchListener;
     }
-    */
 }

@@ -2,6 +2,7 @@ package com.amy.titledrecyclerview;
 
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.v4.view.MotionEventCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -18,7 +19,7 @@ import java.util.List;
 
 public class SwipeItemRecyclerViewActivity extends AppCompatActivity {
 
-    private RecyclerView mList;
+    private CustomRecyclerView mList;
     private final List<String> hellos = new ArrayList<>();
     private final List<SwipeItemLayout> cacheOpenLists = new ArrayList<>();
 
@@ -35,19 +36,19 @@ public class SwipeItemRecyclerViewActivity extends AppCompatActivity {
         mList.setLayoutManager(new LinearLayoutManager(this));
         MyAdapter adapter = new MyAdapter();
         mList.setAdapter(adapter);
-        mList.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                forceClose();
-                return false;
-
-            }
-        });
     }
 
     public void forceClose() {
         for (SwipeItemLayout item : cacheOpenLists) {
             item.slide(0, true);
+        }
+    }
+
+    public void forceClose(SwipeItemLayout exceptThis) {
+        for (SwipeItemLayout item : cacheOpenLists) {
+            if (item != exceptThis) {
+                item.slide(0, true);
+            }
         }
     }
 
@@ -62,15 +63,32 @@ public class SwipeItemRecyclerViewActivity extends AppCompatActivity {
         public void onBindViewHolder(MyHolder holder, int position) {
             holder.mTop.setText(hellos.get(position));
             holder.mBottom.setText("youmtfk");
+            holder.mItemLayout.setTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    final int action = MotionEventCompat.getActionMasked(event);
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        SwipeItemLayout it = (SwipeItemLayout) v;
+                        if (cacheOpenLists.size() != 0) {
+                            forceClose(it);
+                        }
+                    }
+                    return false;
+                }
+            });
             holder.mItemLayout.setOpenStatusListener(new SwipeItemLayout.OpenStatusListener() {
                 @Override
-                public void onOpened(SwipeItemLayout item) {
-                    cacheOpenLists.add(item);
-                }
-
-                @Override
-                public void onClosed(SwipeItemLayout item) {
-                    cacheOpenLists.remove(item);
+                public void onStatusChanged(SwipeItemLayout.Status status, SwipeItemLayout item) {
+                    switch (status) {
+                        case Opened: {
+                            cacheOpenLists.add(item);
+                            break;
+                        }
+                        case Closed: {
+                            cacheOpenLists.remove(item);
+                            break;
+                        }
+                    }
                 }
             });
         }
